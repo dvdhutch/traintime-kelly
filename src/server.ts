@@ -90,11 +90,8 @@ try {
   console.error("Error loading LIRR trips:", err);
 }
 
-// Simple in-memory cache
-let cachedDepartures: Departure[] = [];
-let lastFetch = 0;
-
-async function fetchLIRRFeed(): Promise<void> {
+// Fetch LIRR data on-demand (serverless-friendly)
+async function fetchLIRRFeed(): Promise<{ departures: Departure[], updatedAt: number }> {
   try {
     const headers: Record<string, string> = {
       "Content-Type": "application/x-protobuf",
@@ -108,7 +105,7 @@ async function fetchLIRRFeed(): Promise<void> {
     
     if (!res.ok) {
       console.error(`HTTP ${res.status}: ${res.statusText}`);
-      return;
+      return { departures: [], updatedAt: Date.now() };
     }
 
     const buffer = await res.arrayBuffer();
@@ -191,40 +188,46 @@ async function fetchLIRRFeed(): Promise<void> {
       });
     });
 
-    cachedDepartures = allDepartures;
-    lastFetch = Date.now();
-    console.log(`✓ Updated LIRR departures: ${allDepartures.length} total`);
+    const now = Date.now();
+    console.log(`✓ Fetched LIRR departures: ${allDepartures.length} total`);
+    return { departures: allDepartures, updatedAt: now };
   } catch (err) {
     console.error("Error fetching LIRR feed:", err);
+    return { departures: [], updatedAt: Date.now() };
   }
 }
 
-// Refresh every 20 seconds
-setInterval(fetchLIRRFeed, 20000);
-fetchLIRRFeed(); // Initial fetch
+// API endpoint - get departures (fetches fresh data on each request)
+app.get("/api/departures", async (req, res) => {
+  try {
+    const stops = (req.query.stops as string | undefined)?.split(",") || [];
+    
+    // Fetch fresh LIRR data
+    const { departures: allDepartures, updatedAt } = await fetchLIRRFeed();
+    
+    let results = allDepartures;
 
-// API endpoint - get departures
-app.get("/api/departures", (req, res) => {
-  const stops = (req.query.stops as string | undefined)?.split(",") || [];
-  let results = cachedDepartures;
+    if (stops.length > 0) {
+      results = results.filter(d => stops.includes(d.stopId));
+    }
 
-  if (stops.length > 0) {
-    results = results.filter(d => stops.includes(d.stopId));
+    // Filter future departures only, sort by time, limit to next 50
+    const now = Date.now();
+    const NINETY_MINUTES_MS = 90 * 60 * 1000;
+    
+    results = results
+      .filter(d => d.time >= now && d.time <= now + NINETY_MINUTES_MS) // Next 1.5 hours
+      .sort((a, b) => a.time - b.time)
+      .slice(0, 50);
+
+    res.json({
+      updatedAt,
+      departures: results,
+    });
+  } catch (err) {
+    console.error("Error in /api/departures:", err);
+    res.status(500).json({ error: "Failed to fetch departures", departures: [], updatedAt: Date.now() });
   }
-
-  // Filter future departures only, sort by time, limit to next 50
-  const now = Date.now();
-  const NINETY_MINUTES_MS = 90 * 60 * 1000;
-  
-  results = results
-    .filter(d => d.time >= now && d.time <= now + NINETY_MINUTES_MS) // Next 1.5 hours
-    .sort((a, b) => a.time - b.time)
-    .slice(0, 50);
-
-  res.json({
-    updatedAt: lastFetch,
-    departures: results,
-  });
 });
 
 // API endpoint - get all LIRR stations
@@ -248,35 +251,42 @@ app.get("/api/branch-colors", (req, res) => {
 app.get("/health", (req, res) => {
   res.json({ 
     status: "ok", 
-    lastFetch,
-    cachedCount: cachedDepartures.length,
+    mode: "serverless",
     stationsLoaded: Object.keys(LIRR_STOPS).length,
     tripsLoaded: Object.keys(LIRR_TRIPS).length,
   });
 });
 
 // Debug endpoint to see available stops
-app.get("/api/debug/stops", (req, res) => {
-  const stopMap: Record<string, { count: number, branches: Set<string> }> = {};
+app.get("/api/debug/stops", async (req, res) => {
+  try {
+    // Fetch fresh LIRR data
+    const { departures: allDepartures } = await fetchLIRRFeed();
+    
+    const stopMap: Record<string, { count: number, branches: Set<string> }> = {};
 
-  cachedDepartures.forEach(dep => {
-    if (!stopMap[dep.stopId]) {
-      stopMap[dep.stopId] = { count: 0, branches: new Set() };
-    }
-    stopMap[dep.stopId].count++;
-    stopMap[dep.stopId].branches.add(dep.route);
-  });
+    allDepartures.forEach(dep => {
+      if (!stopMap[dep.stopId]) {
+        stopMap[dep.stopId] = { count: 0, branches: new Set() };
+      }
+      stopMap[dep.stopId].count++;
+      stopMap[dep.stopId].branches.add(dep.route);
+    });
 
-  const stops = Object.entries(stopMap)
-    .map(([stopId, info]) => ({
-      stopId,
-      stationName: LIRR_STOPS[stopId] || stopId,
-      branches: Array.from(info.branches).sort(),
-      count: info.count,
-    }))
-    .sort((a, b) => a.stationName.localeCompare(b.stationName));
+    const stops = Object.entries(stopMap)
+      .map(([stopId, info]) => ({
+        stopId,
+        stationName: LIRR_STOPS[stopId] || stopId,
+        branches: Array.from(info.branches).sort(),
+        count: info.count,
+      }))
+      .sort((a, b) => a.stationName.localeCompare(b.stationName));
 
-  res.json({ stops, total: stops.length });
+    res.json({ stops, total: stops.length });
+  } catch (err) {
+    console.error("Error in /api/debug/stops:", err);
+    res.status(500).json({ error: "Failed to fetch stops", stops: [], total: 0 });
+  }
 });
 
 // Serve static frontend from /public
