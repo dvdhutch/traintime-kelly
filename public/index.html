@@ -69,6 +69,30 @@
       transform: rotate(30deg);
     }
 
+    .fullscreen-btn {
+      position: fixed;
+      top: 74px;
+      right: 20px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #f7f7f7;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      z-index: 100;
+    }
+
+    .fullscreen-btn:hover {
+      background: rgba(255,255,255,0.2);
+      transform: scale(1.1);
+    }
+
     .row {
       display: grid;
       grid-template-columns: 70px minmax(0, 1fr) minmax(80px, 140px) 60px;
@@ -436,6 +460,12 @@
         height: 40px;
         font-size: 18px;
       }
+      .fullscreen-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+        top: 70px;
+      }
       .modal {
         width: 95%;
         max-height: 85vh;
@@ -463,6 +493,9 @@
 
   <!-- Settings Button -->
   <button class="settings-btn" onclick="openSettings()" title="Settings">⚙️</button>
+
+  <!-- Fullscreen Button -->
+  <button class="fullscreen-btn" onclick="toggleFullscreen()" title="Toggle Fullscreen">⛶</button>
 
   <!-- Main Board -->
   <div class="board">
@@ -857,6 +890,21 @@
         const rowsEl = document.getElementById("rows");
         if (rowsEl) {
           rowsEl.innerHTML = '<div class="empty-state">Error loading departures</div>';
+        }
+      }
+    }
+
+    // Fullscreen toggle function
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        // Enter fullscreen
+        document.documentElement.requestFullscreen().catch(err => {
+          console.error('Error attempting to enable fullscreen:', err);
+        });
+      } else {
+        // Exit fullscreen
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
         }
       }
     }
