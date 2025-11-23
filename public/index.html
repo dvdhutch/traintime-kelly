@@ -451,6 +451,41 @@
       font-weight: 600;
     }
 
+    /* Tablet Portrait Optimization */
+    @media (min-width: 601px) and (max-width: 1024px) and (orientation: portrait) {
+      .row {
+        grid-template-columns: 130px minmax(0, 1fr) minmax(140px, 200px) 90px;
+        gap: 16px;
+        padding: 16px 12px;
+      }
+      .row .route-pill {
+        height: 36px;
+        padding: 0 14px;
+        min-width: 56px;
+        border-radius: 6px;
+      }
+      .board {
+        padding: 20px;
+      }
+      .board-header {
+        margin-bottom: 20px;
+        padding-bottom: 14px;
+      }
+      .header-buttons {
+        gap: 10px;
+      }
+      .settings-btn,
+      .fullscreen-btn {
+        width: 54px;
+        height: 54px;
+        font-size: 26px;
+      }
+      .station-header {
+        padding: 20px 12px 10px;
+        margin-top: 16px;
+      }
+    }
+
     @media (max-width: 600px) {
       .row {
         grid-template-columns: 120px minmax(0, 1fr) 90px 80px;
