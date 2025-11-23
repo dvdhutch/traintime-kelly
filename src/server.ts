@@ -292,9 +292,15 @@ app.get("/api/debug/stops", async (req, res) => {
 // Serve static frontend from /public
 app.use(express.static("public"));
 
-app.listen(PORT, () => {
-  console.log(`🚂 LIRR Departure Board Server`);
-  console.log(`   Running on http://localhost:${PORT}`);
-  console.log(`   MTA API Key: ${MTA_API_KEY ? "✓ Set" : "⚠️  Not set (may be required)"}`);
-  console.log(`   LIRR Stations: ${Object.keys(LIRR_STOPS).length} loaded`);
-});
+// For local development
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`🚂 LIRR Departure Board Server`);
+    console.log(`   Running on http://localhost:${PORT}`);
+    console.log(`   MTA API Key: ${MTA_API_KEY ? "✓ Set" : "⚠️  Not set (may be required)"}`);
+    console.log(`   LIRR Stations: ${Object.keys(LIRR_STOPS).length} loaded`);
+  });
+}
+
+// Export for Vercel serverless
+export default app;
