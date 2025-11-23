@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LIRR Departures</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro", sans-serif;
+      background: #020314;
+      color: #f7f7f7;
+      overflow-x: hidden;
+    }
+
+    .board {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .board-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid rgba(255,255,255,0.2);
+    }
+
+    .board-title {
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      font-size: 16px;
+      text-transform: uppercase;
+    }
+
+    .board-clock {
+      font-size: 14px;
+      opacity: 0.7;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .settings-btn {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #f7f7f7;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      z-index: 100;
+    }
+
+    .settings-btn:hover {
+      background: rgba(255,255,255,0.2);
+      transform: rotate(30deg);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 70px minmax(0, 1fr) minmax(80px, 140px) 60px;
+      gap: 12px;
+      padding: 10px 12px;
+      font-size: 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      align-items: center;
+    }
+
+    .row.header {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      opacity: 0.7;
+      border-bottom-color: rgba(255,255,255,0.25);
+      padding: 8px 12px;
+      font-weight: 600;
+    }
+
+    .station-header {
+      padding: 16px 12px 8px;
+      font-size: 13px;
+      font-weight: 600;
+      opacity: 0.8;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-bottom: 1px solid rgba(255,255,255,0.15);
+      margin-top: 12px;
+    }
+
+    .station-header:first-child {
+      margin-top: 0;
+    }
+
+    .row .route-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 32px;
+      max-width: 100%;
+      height: 24px;
+      padding: 0 10px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      letter-spacing: 0.03em;
+    }
+
+    .row .destination {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 13px;
+    }
+
+    .time {
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+    }
+
+    .mins {
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      font-size: 14px;
+      text-align: right;
+    }
+
+    .mins.soon {
+      color: #ffcc00;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      opacity: 0.5;
+      font-size: 14px;
+    }
+
+    /* Modal Styles */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
+      animation: fadeIn 0.2s;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .modal {
+      background: #0a0a1a;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 12px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      animation: slideUp 0.3s;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      color: #f7f7f7;
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+
+    .close-btn:hover {
+      background: rgba(255,255,255,0.1);
+    }
+
+    .modal-body {
+      padding: 24px;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .station-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .station-item {
+      display: flex;
+      align-items: center;
+      padding: 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .station-item:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.2);
+    }
+
+    .station-item.selected {
+      background: rgba(66, 135, 245, 0.2);
+      border-color: rgba(66, 135, 245, 0.5);
+    }
+
+    .station-checkbox {
+      width: 20px;
+      height: 20px;
+      margin-right: 12px;
+      cursor: pointer;
+      accent-color: #4287f5;
+    }
+
+    .station-info {
+      flex: 1;
+    }
+
+    .station-name {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .search-box {
+      margin-bottom: 16px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 6px;
+      color: #f7f7f7;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: #4287f5;
+      background: rgba(255,255,255,0.08);
+    }
+
+    .search-input::placeholder {
+      color: rgba(247,247,247,0.4);
+    }
+
+    .section-header {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      opacity: 0.5;
+      margin-top: 16px;
+      margin-bottom: 8px;
+      padding-left: 4px;
+    }
+
+    .section-header:first-child {
+      margin-top: 0;
+    }
+
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .selection-count {
+      font-size: 13px;
+      opacity: 0.8;
+      font-weight: 500;
+    }
+
+    .footer-buttons {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #4287f5;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #357ae8;
+    }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.1);
+      color: #f7f7f7;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255,255,255,0.15);
+    }
+
+    /* Welcome Screen */
+    .welcome-screen {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #020314;
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .welcome-screen.active {
+      display: flex;
+    }
+
+    .welcome-content {
+      max-width: 500px;
+      text-align: center;
+    }
+
+    .welcome-title {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      letter-spacing: 0.05em;
+    }
+
+    .welcome-subtitle {
+      font-size: 16px;
+      opacity: 0.7;
+      margin-bottom: 40px;
+      line-height: 1.6;
+    }
+
+    .welcome-icon {
+      font-size: 64px;
+      margin-bottom: 24px;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 24px 20px;
+      font-size: 14px;
+      opacity: 0.7;
+      margin-top: 40px;
+    }
+
+    .footer b {
+      font-weight: 600;
+    }
+
+    @media (max-width: 600px) {
+      .row {
+        grid-template-columns: 70px minmax(0, 1fr) 60px 50px;
+        gap: 8px;
+        font-size: 13px;
+      }
+      .board {
+        padding: 12px;
+      }
+      .settings-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+      }
+      .modal {
+        width: 95%;
+        max-height: 85vh;
+      }
+      .footer {
+        font-size: 13px;
+        padding: 20px 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Welcome Screen -->
+  <div class="welcome-screen" id="welcomeScreen">
+    <div class="welcome-content">
+      <div class="welcome-icon">🚂</div>
+      <h1 class="welcome-title">Welcome to LIRR Departures</h1>
+      <p class="welcome-subtitle">
+        Track real-time Long Island Rail Road trains.<br>
+        Select one or more stations to monitor departures.
+      </p>
+      <button class="btn btn-primary" onclick="openSettings()">Choose Stations</button>
+    </div>
+  </div>
+
+  <!-- Settings Button -->
+  <button class="settings-btn" onclick="openSettings()" title="Settings">⚙️</button>
+
+  <!-- Main Board -->
+  <div class="board">
+    <div class="board-header">
+      <div class="board-title">LIRR Departures</div>
+      <div class="board-clock" id="clock"></div>
+    </div>
+
+    <div class="row header">
+      <div>Time</div>
+      <div>Destination</div>
+      <div>Branch</div>
+      <div>Min</div>
+    </div>
+
+    <div id="rows"></div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="modalOverlay" onclick="closeModalOnOverlayClick(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <div class="modal-title">Select LIRR Stations (Multi-Select)</div>
+        <button class="close-btn" onclick="closeSettings()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="search-box">
+          <input
+            type="text"
+            class="search-input"
+            id="stationSearch"
+            placeholder="Search stations..."
+          />
+        </div>
+        <div class="station-list" id="stationList"></div>
+      </div>
+      <div class="modal-footer">
+        <div class="selection-count" id="selectionCount">0 stations selected</div>
+        <div class="footer-buttons">
+          <button class="btn btn-secondary" onclick="clearAll()">Clear All</button>
+          <button class="btn btn-secondary" onclick="resetToDefaults()">Reset to Defaults</button>
+          <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Default stations: Penn Station (237) and Grand Central (349)
+    const DEFAULT_STOPS = ["237", "349"];
+
+    // All LIRR stations (loaded from API)
+    let ALL_STATIONS = [];
+
+    // Branch colors (loaded from API)
+    let BRANCH_COLORS = {};
+    
+    // Track selection state while modal is open
+    let MODAL_SELECTION = new Set();
+
+    // Get selected stops from localStorage or use defaults
+    function getSelectedStops() {
+      const saved = localStorage.getItem("selectedLIRRStops");
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error("Error parsing saved stops:", e);
+        }
+      }
+      return DEFAULT_STOPS;
+    }
+
+    // Save selected stops to localStorage
+    function saveSelectedStops(stops) {
+      localStorage.setItem("selectedLIRRStops", JSON.stringify(stops));
+    }
+
+    // Check if this is first visit
+    function isFirstVisit() {
+      return !localStorage.getItem("hasVisited");
+    }
+
+    // Mark as visited
+    function markAsVisited() {
+      localStorage.setItem("hasVisited", "true");
+    }
+
+    // Show welcome screen on first visit
+    if (isFirstVisit()) {
+      document.getElementById("welcomeScreen").classList.add("active");
+    }
+
+    function formatTime(ts) {
+      const d = new Date(ts);
+      return d.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+    }
+
+    function updateClock() {
+      const clockEl = document.getElementById("clock");
+      if (clockEl) {
+        clockEl.textContent = new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit"
+        });
+      }
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Load all LIRR stations from API
+    async function loadAllStations() {
+      if (ALL_STATIONS.length > 0) return; // Already loaded
+
+      try {
+        const res = await fetch("/api/stations");
+        const data = await res.json();
+        ALL_STATIONS = data.stations || [];
+        console.log(`Loaded ${ALL_STATIONS.length} LIRR stations`);
+      } catch (err) {
+        console.error("Error loading stations:", err);
+      }
+    }
+
+    // Load branch colors from API
+    async function loadBranchColors() {
+      if (Object.keys(BRANCH_COLORS).length > 0) return; // Already loaded
+
+      try {
+        const res = await fetch("/api/branch-colors");
+        BRANCH_COLORS = await res.json();
+        console.log("Loaded branch colors");
+      } catch (err) {
+        console.error("Error loading branch colors:", err);
+      }
+    }
+
+    // Get station name by stop ID
+    function getStationName(stopId) {
+      const station = ALL_STATIONS.find(s => s.stopId === stopId);
+      return station ? station.stopName : stopId;
+    }
+
+    // Modal functions
+    async function openSettings() {
+      // Hide welcome screen if it's open
+      document.getElementById("welcomeScreen").classList.remove("active");
+      markAsVisited();
+
+      // Load stations if not already loaded
+      await loadAllStations();
+      
+      // Initialize modal selection state from saved settings
+      MODAL_SELECTION = new Set(getSelectedStops());
+
+      // Setup search functionality
+      const searchInput = document.getElementById("stationSearch");
+      searchInput.value = ""; // Clear search
+      searchInput.removeEventListener("input", handleSearch);
+      searchInput.addEventListener("input", handleSearch);
+
+      // Display station list
+      renderStationList();
+      document.getElementById("modalOverlay").classList.add("active");
+    }
+
+    function closeSettings() {
+      document.getElementById("modalOverlay").classList.remove("active");
+    }
+
+    function closeModalOnOverlayClick(event) {
+      if (event.target.id === "modalOverlay") {
+        closeSettings();
+      }
+    }
+
+    function handleSearch(e) {
+      const query = e.target.value.toLowerCase().trim();
+      renderStationList(query);
+    }
+
+    function renderStationList(searchQuery = "") {
+      const container = document.getElementById("stationList");
+
+      let stationsToShow = ALL_STATIONS;
+
+      if (searchQuery) {
+        stationsToShow = ALL_STATIONS.filter(station => 
+          station.stopName.toLowerCase().includes(searchQuery) ||
+          station.stopId.includes(searchQuery)
+        );
+
+        if (stationsToShow.length === 0) {
+          container.innerHTML = '<div class="empty-state">No stations found</div>';
+          updateSelectionCount();
+          return;
+        }
+      }
+
+      // Separate selected and unselected stations based on MODAL_SELECTION
+      const selectedStations = stationsToShow.filter(s => MODAL_SELECTION.has(s.stopId));
+      const unselectedStations = stationsToShow.filter(s => !MODAL_SELECTION.has(s.stopId));
+
+      let htmlContent = "";
+
+      if (selectedStations.length > 0) {
+        const totalSelectedCount = MODAL_SELECTION.size;
+        const headerText = searchQuery 
+          ? `Selected in Search (${selectedStations.length} of ${totalSelectedCount} total selected)`
+          : `Selected Stations (${totalSelectedCount})`;
+        htmlContent += `<div class="section-header">${headerText}</div>`;
+        htmlContent += selectedStations.map(station => `
+          <div class="station-item selected" data-stopid="${station.stopId}" onclick="toggleStation(this, event)">
+            <input type="checkbox" class="station-checkbox" checked>
+            <div class="station-info">
+              <div class="station-name">${station.stopName}</div>
+            </div>
+          </div>
+        `).join("");
+      }
+
+      if (unselectedStations.length > 0) {
+        const headerText = searchQuery ? `Search Results (${unselectedStations.length})` : "LIRR Stations";
+        htmlContent += `<div class="section-header">${headerText}</div>`;
+        htmlContent += unselectedStations.map(station => `
+          <div class="station-item" data-stopid="${station.stopId}" onclick="toggleStation(this, event)">
+            <input type="checkbox" class="station-checkbox">
+            <div class="station-info">
+              <div class="station-name">${station.stopName}</div>
+            </div>
+          </div>
+        `).join("");
+      }
+
+      container.innerHTML = htmlContent;
+      
+      // Update selection count
+      updateSelectionCount();
+    }
+
+    function toggleStation(element, event) {
+      const checkbox = element.querySelector(".station-checkbox");
+      const stopId = element.getAttribute("data-stopid");
+      
+      // If the click was directly on the checkbox, don't toggle it again
+      if (event && event.target.classList.contains('station-checkbox')) {
+        // Just sync the selected class with the checkbox state
+        if (checkbox.checked) {
+          element.classList.add("selected");
+          MODAL_SELECTION.add(stopId);
+        } else {
+          element.classList.remove("selected");
+          MODAL_SELECTION.delete(stopId);
+        }
+      } else {
+        // Click was elsewhere on the element, so toggle both
+        checkbox.checked = !checkbox.checked;
+        element.classList.toggle("selected");
+        
+        if (checkbox.checked) {
+          MODAL_SELECTION.add(stopId);
+        } else {
+          MODAL_SELECTION.delete(stopId);
+        }
+      }
+      
+      // Update selection count
+      updateSelectionCount();
+    }
+
+    function updateSelectionCount() {
+      const checkedCount = MODAL_SELECTION.size;
+      const countEl = document.getElementById("selectionCount");
+      if (countEl) {
+        countEl.textContent = `${checkedCount} station${checkedCount !== 1 ? 's' : ''} selected`;
+      }
+    }
+
+    function clearAll() {
+      MODAL_SELECTION.clear();
+      const searchInput = document.getElementById("stationSearch");
+      searchInput.value = ""; // Clear search
+      renderStationList();
+    }
+
+    async function saveSettings() {
+      if (MODAL_SELECTION.size === 0) {
+        alert("Please select at least one station");
+        return;
+      }
+
+      saveSelectedStops(Array.from(MODAL_SELECTION));
+      closeSettings();
+
+      // Refresh departures
+      setTimeout(() => {
+        fetchDepartures();
+      }, 100);
+    }
+
+    function resetToDefaults() {
+      MODAL_SELECTION = new Set(DEFAULT_STOPS);
+      const searchInput = document.getElementById("stationSearch");
+      searchInput.value = ""; // Clear search
+      renderStationList();
+    }
+
+    async function fetchDepartures() {
+      try {
+        // Load data first
+        await Promise.all([loadAllStations(), loadBranchColors()]);
+
+        const STOPS = getSelectedStops();
+
+        if (STOPS.length === 0) {
+          document.getElementById("rows").innerHTML = 
+            '<div class="empty-state">No stations selected. Click the settings button to choose stations.</div>';
+          return;
+        }
+
+        const res = await fetch("/api/departures?stops=" + STOPS.join(","));
+        const data = await res.json();
+        const rowsEl = document.getElementById("rows");
+
+        if (!rowsEl) return;
+
+        if (!data.departures || data.departures.length === 0) {
+          rowsEl.innerHTML = '<div class="empty-state">No departures available in the next 90 minutes</div>';
+          return;
+        }
+
+        rowsEl.innerHTML = "";
+
+        const now = Date.now();
+
+        // Group departures by station
+        const stationGroups = {};
+        
+        STOPS.forEach(stopId => {
+          if (!stationGroups[stopId]) {
+            stationGroups[stopId] = {
+              name: getStationName(stopId),
+              departures: []
+            };
+          }
+        });
+
+        // Assign departures to stations
+        data.departures.forEach(dep => {
+          if (stationGroups[dep.stopId]) {
+            stationGroups[dep.stopId].departures.push(dep);
+          }
+        });
+
+        // Render grouped by station
+        Object.values(stationGroups).forEach(station => {
+          if (station.departures.length === 0) return;
+
+          // Add station header
+          const header = document.createElement("div");
+          header.className = "station-header";
+          header.textContent = station.name;
+          rowsEl.appendChild(header);
+
+          // Show all trains, sorted by time
+          const selectedTrains = station.departures
+            .sort((a, b) => a.time - b.time);
+
+          selectedTrains.forEach(dep => {
+            const row = document.createElement("div");
+            row.className = "row";
+
+            const mins = Math.max(0, Math.round((dep.time - now) / 60000));
+            const minsClass = mins <= 2 ? "soon" : "";
+
+            // Get branch colors
+            const colors = BRANCH_COLORS[dep.route] || { bg: "#666", text: "#FFF" };
+
+            row.innerHTML = `
+              <div class="time">${formatTime(dep.time)}</div>
+              <div class="destination">${dep.destination}</div>
+              <div><span class="route-pill" style="background: ${colors.bg}; color: ${colors.text};">${dep.route}</span></div>
+              <div class="mins ${minsClass}">${mins}</div>
+            `;
+
+            rowsEl.appendChild(row);
+          });
+        });
+      } catch (err) {
+        console.error("Error fetching departures:", err);
+        const rowsEl = document.getElementById("rows");
+        if (rowsEl) {
+          rowsEl.innerHTML = '<div class="empty-state">Error loading departures</div>';
+        }
+      }
+    }
+
+    // Initial fetch
+    fetchDepartures();
+    // Refresh every 15 seconds
+    setInterval(fetchDepartures, 15000);
+  </script>
+
+  <!-- Footer -->
+  <div class="footer">
+    Made with ❤️ by <b>David Hutchinson</b> for <b>Kelly Chau</b>
+  </div>
+</body>
+</html>
